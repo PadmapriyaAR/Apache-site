@@ -1,0 +1,51 @@
+name: Deploy Apache Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Update system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apache2
+          
+      - name: Enable Apache modules
+        run: |
+          sudo a2enmod rewrite
+          sudo a2enmod ssl
+          sudo a2enmod cache
+          sudo a2enmod cache_disk
+          
+      - name: Configure caching
+        run: |
+          echo "CacheEnable disk /" | sudo tee -a /etc/apache2/mods-enabled/cache_disk.conf
+          echo "CacheRoot /var/cache/apache2/mod_cache_disk" | sudo tee -a /etc/apache2/mods-enabled/cache_disk.conf
+          
+      - name: Run security audit
+        run: |
+          sudo apt-get install -y lynis
+          sudo lynis audit system --quiet
+          
+      - name: Start Apache service
+        run: |
+          sudo systemctl start apache2 || { echo "Failed to start Apache"; exit 1; }
+          
+      - name: Verify Apache status
+        run: |
+          sudo systemctl status apache2 || { echo "Apache service check failed"; exit 1; }
+          
+      - name: Upload Apache configuration
+        uses: actions/upload-artifact@v4
+        with:
+          name: apache-config
+          path: /etc/apache2/
+          retention-days: 7
